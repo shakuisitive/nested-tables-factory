@@ -99,11 +99,11 @@ const TaskTable: React.FC<ExtendedTaskTableProps> = ({
     setLocalTasks(items);
   };
 
-  const handleUpdateField = useCallback((taskId: string, field: string, value: string) => {
+  const handleUpdateField = useCallback((taskId: string, field: keyof Task, value: string) => {
     setLocalTasks(prev => 
       prev.map(task => 
         task.id === taskId 
-          ? { ...task, [field]: value }
+          ? { ...task, [field]: field === 'tags' ? [value] : value }
           : task
       )
     );
