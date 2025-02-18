@@ -1,7 +1,16 @@
 
 import React from 'react';
 import TaskTable from '../components/TaskTable';
-import { Task } from '../types/table';
+import { Task, Column } from '../types/table';
+
+const defaultColumns: Column[] = [
+  { id: 'title', title: 'Title', field: 'title' },
+  { id: 'tags', title: 'Tags', field: 'tags' },
+  { id: 'assignee', title: 'Assignee', field: 'assignee' },
+  { id: 'status', title: 'Status', field: 'status' },
+  { id: 'startDate', title: 'Start Date', field: 'startDate' },
+  { id: 'dueDate', title: 'Due Date', field: 'dueDate' }
+];
 
 const mockTasks: Task[] = [
   {
@@ -92,6 +101,8 @@ const mockTasks: Task[] = [
 ];
 
 const Index = () => {
+  const [columns, setColumns] = React.useState<Column[]>(defaultColumns);
+
   return (
     <div className="min-h-screen bg-white p-8">
       <div className="max-w-7xl mx-auto">
@@ -118,7 +129,7 @@ const Index = () => {
             </button>
           </div>
         </div>
-        <TaskTable tasks={mockTasks} />
+        <TaskTable tasks={mockTasks} columns={columns} onColumnUpdate={setColumns} />
       </div>
     </div>
   );

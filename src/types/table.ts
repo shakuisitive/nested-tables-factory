@@ -10,9 +10,20 @@ export interface Task {
   dueDate?: string;
   subCount?: number;
   isExpanded?: boolean;
+  isEditing?: {
+    field: string;
+    value: string;
+  } | null;
 }
 
 export interface TaskTableProps {
   tasks: Task[];
   level?: number;
+}
+
+export interface Column {
+  id: string;
+  title: string;
+  field: keyof Task;
+  width?: number;
 }

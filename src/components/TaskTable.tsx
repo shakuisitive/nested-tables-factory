@@ -1,7 +1,49 @@
 
-import React, { useState } from 'react';
-import { Task, TaskTableProps } from '../types/table';
-import { ChevronRight, ChevronDown } from 'lucide-react';
+import React, { useState, useCallback } from 'react';
+import { Task, TaskTableProps, Column } from '../types/table';
+import { ChevronDown, ChevronRight, Plus } from 'lucide-react';
+import { DragDropContext, Draggable, Droppable } from '@hello-pangea/dnd';
+
+interface EditableFieldProps {
+  value: string;
+  onSave: (value: string) => void;
+  type?: string;
+}
+
+const EditableField: React.FC<EditableFieldProps> = ({ value, onSave, type = "text" }) => {
+  const [editing, setEditing] = useState(false);
+  const [tempValue, setTempValue] = useState(value);
+
+  const handleDoubleClick = () => {
+    setEditing(true);
+    setTempValue(value);
+  };
+
+  const handleSave = () => {
+    onSave(tempValue);
+    setEditing(false);
+  };
+
+  if (editing) {
+    return (
+      <input
+        type={type}
+        value={tempValue}
+        onChange={(e) => setTempValue(e.target.value)}
+        onBlur={handleSave}
+        onKeyDown={(e) => e.key === 'Enter' && handleSave()}
+        className="w-full px-2 py-1 rounded border border-blue-500 focus:outline-none"
+        autoFocus
+      />
+    );
+  }
+
+  return (
+    <div onDoubleClick={handleDoubleClick} className="cursor-text">
+      {value}
+    </div>
+  );
+};
 
 const StatusBadge = ({ status }: { status: Task['status'] }) => {
   const colors = {
@@ -23,61 +65,19 @@ const TagBadge = ({ tag }: { tag: string }) => (
   </span>
 );
 
-const TaskRow = ({ task, level = 0, onToggle }: { task: Task; level?: number; onToggle: (id: string) => void }) => {
-  const paddingLeft = `${level * 2 + 1}rem`;
+interface ExtendedTaskTableProps extends TaskTableProps {
+  columns: Column[];
+  onColumnUpdate?: (columns: Column[]) => void;
+}
 
-  return (
-    <tr className="border-t border-gray-100 hover:bg-gray-50 transition-colors duration-150">
-      <td className="py-3" style={{ paddingLeft }}>
-        <div className="flex items-center space-x-2">
-          {task.subTasks && task.subTasks.length > 0 && (
-            <button 
-              onClick={() => onToggle(task.id)}
-              className="p-1 hover:bg-gray-200 rounded-full transition-colors duration-150"
-            >
-              {task.isExpanded ? 
-                <ChevronDown className="w-4 h-4 text-gray-500" /> : 
-                <ChevronRight className="w-4 h-4 text-gray-500" />
-              }
-            </button>
-          )}
-          <span className="font-medium text-gray-900">{task.title}</span>
-          {task.subCount && (
-            <span className="text-xs text-gray-500">{task.subCount} subs</span>
-          )}
-        </div>
-      </td>
-      <td className="py-3">
-        <div className="flex flex-wrap gap-1">
-          {task.tags.map((tag, index) => (
-            <TagBadge key={index} tag={tag} />
-          ))}
-        </div>
-      </td>
-      <td className="py-3">
-        {task.assignee && (
-          <span className="text-sm text-gray-600">{task.assignee}</span>
-        )}
-      </td>
-      <td className="py-3">
-        <StatusBadge status={task.status} />
-      </td>
-      <td className="py-3">
-        {task.startDate && (
-          <span className="text-sm text-gray-600">{task.startDate}</span>
-        )}
-      </td>
-      <td className="py-3">
-        {task.dueDate && (
-          <span className="text-sm text-gray-600">{task.dueDate}</span>
-        )}
-      </td>
-    </tr>
-  );
-};
-
-const TaskTable: React.FC<TaskTableProps> = ({ tasks, level = 0 }) => {
+const TaskTable: React.FC<ExtendedTaskTableProps> = ({ 
+  tasks, 
+  level = 0, 
+  columns,
+  onColumnUpdate 
+}) => {
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
+  const [localTasks, setLocalTasks] = useState<Task[]>(tasks);
 
   const toggleTask = (taskId: string) => {
     const newExpanded = new Set(expandedTasks);
@@ -89,34 +89,116 @@ const TaskTable: React.FC<TaskTableProps> = ({ tasks, level = 0 }) => {
     setExpandedTasks(newExpanded);
   };
 
+  const handleDragEnd = (result: any) => {
+    if (!result.destination) return;
+
+    const items = Array.from(localTasks);
+    const [reorderedItem] = items.splice(result.source.index, 1);
+    items.splice(result.destination.index, 0, reorderedItem);
+
+    setLocalTasks(items);
+  };
+
+  const handleUpdateField = useCallback((taskId: string, field: string, value: string) => {
+    setLocalTasks(prev => 
+      prev.map(task => 
+        task.id === taskId 
+          ? { ...task, [field]: value }
+          : task
+      )
+    );
+  }, []);
+
   return (
     <div className="overflow-x-auto">
-      <table className="w-full">
-        <thead>
-          <tr className="text-left text-sm font-medium text-gray-500">
-            <th className="py-3 pl-4">ITEM</th>
-            <th className="py-3">TAGS</th>
-            <th className="py-3">ASSIGNEES</th>
-            <th className="py-3">STATUS</th>
-            <th className="py-3">START DATE</th>
-            <th className="py-3">DUE DATE</th>
-          </tr>
-        </thead>
-        <tbody>
-          {tasks.map((task) => (
-            <React.Fragment key={task.id}>
-              <TaskRow 
-                task={{ ...task, isExpanded: expandedTasks.has(task.id) }} 
-                level={level} 
-                onToggle={toggleTask}
-              />
-              {task.subTasks && expandedTasks.has(task.id) && (
-                <TaskTable tasks={task.subTasks} level={level + 1} />
-              )}
-            </React.Fragment>
-          ))}
-        </tbody>
-      </table>
+      <DragDropContext onDragEnd={handleDragEnd}>
+        <table className="w-full">
+          <thead>
+            <tr className="text-left text-sm font-medium text-gray-500">
+              {columns.map((column, index) => (
+                <th key={column.id} className="py-3 pl-4">
+                  <EditableField 
+                    value={column.title}
+                    onSave={(value) => {
+                      if (onColumnUpdate) {
+                        const newColumns = [...columns];
+                        newColumns[index] = { ...newColumns[index], title: value };
+                        onColumnUpdate(newColumns);
+                      }
+                    }}
+                  />
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <Droppable droppableId="tasks">
+            {(provided) => (
+              <tbody {...provided.droppableProps} ref={provided.innerRef}>
+                {localTasks.map((task, index) => (
+                  <Draggable key={task.id} draggableId={task.id} index={index}>
+                    {(provided) => (
+                      <React.Fragment>
+                        <tr
+                          ref={provided.innerRef}
+                          {...provided.draggableProps}
+                          {...provided.dragHandleProps}
+                          className="border-t border-gray-100 hover:bg-gray-50 transition-colors duration-150"
+                        >
+                          {columns.map(column => (
+                            <td key={column.id} className="py-3">
+                              {column.field === 'title' ? (
+                                <div className="flex items-center space-x-2" style={{ paddingLeft: `${level * 2 + 1}rem` }}>
+                                  {task.subTasks && task.subTasks.length > 0 && (
+                                    <button 
+                                      onClick={() => toggleTask(task.id)}
+                                      className="p-1 hover:bg-gray-200 rounded-full transition-colors duration-150"
+                                    >
+                                      {expandedTasks.has(task.id) ? 
+                                        <ChevronDown className="w-4 h-4 text-gray-500" /> : 
+                                        <ChevronRight className="w-4 h-4 text-gray-500" />
+                                      }
+                                    </button>
+                                  )}
+                                  <EditableField
+                                    value={task.title}
+                                    onSave={(value) => handleUpdateField(task.id, 'title', value)}
+                                  />
+                                </div>
+                              ) : column.field === 'status' ? (
+                                <StatusBadge status={task.status} />
+                              ) : column.field === 'tags' ? (
+                                <div className="flex flex-wrap gap-1">
+                                  {task.tags.map((tag, index) => (
+                                    <TagBadge key={index} tag={tag} />
+                                  ))}
+                                </div>
+                              ) : (
+                                <EditableField
+                                  value={task[column.field] || ''}
+                                  onSave={(value) => handleUpdateField(task.id, column.field, value)}
+                                  type={column.field.includes('date') ? 'date' : 'text'}
+                                />
+                              )}
+                            </td>
+                          ))}
+                        </tr>
+                        {task.subTasks && expandedTasks.has(task.id) && (
+                          <TaskTable 
+                            tasks={task.subTasks} 
+                            level={level + 1}
+                            columns={columns}
+                          />
+                        )}
+                      </React.Fragment>
+                    )}
+                  </Draggable>
+                ))}
+                {provided.placeholder}
+              </tbody>
+            )}
+          </Droppable>
+        </table>
+      </DragDropContext>
     </div>
   );
 };
