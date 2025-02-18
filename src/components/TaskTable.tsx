@@ -99,19 +99,79 @@ const TaskTable: React.FC<ExtendedTaskTableProps> = ({
     setLocalTasks(items);
   };
 
-  const handleUpdateField = useCallback((taskId: string, field: keyof Task, value: string) => {
+  const handleUpdateField = useCallback((taskId: string, field: keyof Task | string, value: string) => {
     setLocalTasks(prev => 
       prev.map(task => 
         task.id === taskId 
-          ? { ...task, [field]: field === 'tags' ? [value] : value }
+          ? { ...task, [field]: typeof task[field] === 'object' && Array.isArray(task[field]) ? [value] : value }
           : task
       )
     );
   }, []);
 
+  const handleAddColumn = () => {
+    if (onColumnUpdate) {
+      const newColumnId = `col-${Date.now()}`;
+      const newColumn: Column = {
+        id: newColumnId,
+        title: 'New Column',
+        field: newColumnId as keyof Task,
+        width: 150
+      };
+      onColumnUpdate([...columns, newColumn]);
+    }
+  };
+
+  const handleAddTask = () => {
+    const newTask: Task = {
+      id: `task-${Date.now()}`,
+      title: 'New Task',
+      tags: [],
+      status: 'NOT_STARTED',
+      subTasks: []
+    };
+    setLocalTasks([...localTasks, newTask]);
+  };
+
+  const handleAddSubTask = (parentId: string) => {
+    const newTask: Task = {
+      id: `subtask-${Date.now()}`,
+      title: 'New Subtask',
+      tags: [],
+      status: 'NOT_STARTED'
+    };
+
+    setLocalTasks(prev => 
+      prev.map(task => 
+        task.id === parentId
+          ? { ...task, subTasks: [...(task.subTasks || []), newTask] }
+          : task
+      )
+    );
+
+    // Ensure the parent task is expanded
+    setExpandedTasks(prev => new Set([...prev, parentId]));
+  };
+
   return (
     <div className="overflow-x-auto">
       <DragDropContext onDragEnd={handleDragEnd}>
+        <div className="flex justify-between items-center mb-4">
+          <button
+            onClick={handleAddTask}
+            className="px-3 py-1 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            Add Task
+          </button>
+          <button
+            onClick={handleAddColumn}
+            className="px-3 py-1 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            Add Column
+          </button>
+        </div>
         <table className="w-full">
           <thead>
             <tr className="text-left text-sm font-medium text-gray-500">
@@ -129,6 +189,7 @@ const TaskTable: React.FC<ExtendedTaskTableProps> = ({
                   />
                 </th>
               ))}
+              <th className="w-12"></th>
             </tr>
           </thead>
           <Droppable droppableId="tasks">
@@ -174,19 +235,28 @@ const TaskTable: React.FC<ExtendedTaskTableProps> = ({
                                 </div>
                               ) : (
                                 <EditableField
-                                  value={task[column.field] || ''}
+                                  value={task[column.field]?.toString() || ''}
                                   onSave={(value) => handleUpdateField(task.id, column.field, value)}
                                   type={column.field.includes('date') ? 'date' : 'text'}
                                 />
                               )}
                             </td>
                           ))}
+                          <td className="py-3 pr-4">
+                            <button
+                              onClick={() => handleAddSubTask(task.id)}
+                              className="p-1 hover:bg-gray-200 rounded-full transition-colors duration-150"
+                            >
+                              <Plus className="w-4 h-4 text-gray-500" />
+                            </button>
+                          </td>
                         </tr>
                         {task.subTasks && expandedTasks.has(task.id) && (
                           <TaskTable 
                             tasks={task.subTasks} 
                             level={level + 1}
                             columns={columns}
+                            onColumnUpdate={onColumnUpdate}
                           />
                         )}
                       </React.Fragment>

@@ -10,10 +10,7 @@ export interface Task {
   dueDate?: string;
   subCount?: number;
   isExpanded?: boolean;
-  isEditing?: {
-    field: string;
-    value: string;
-  } | null;
+  [key: string]: any; // Allow dynamic fields
 }
 
 export interface TaskTableProps {
